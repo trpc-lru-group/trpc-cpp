@@ -111,7 +111,8 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @param key The key to insert or update.
   /// @param value The value to associate with the key.
   /// @return  true if insertion succeeded, false otherwise (e.g., key exists).
-  bool Put(const KeyType& key, ValueType&& value) override {
+  bool Put(const KeyType& key, ValueType&& value,
+           std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
 
     if (key_iter_map_.find(key) != key_iter_map_.end()) {
@@ -137,12 +138,15 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @brief Retrieves the value associated with the given key.
   /// @param key The key to look up.
   /// @return An optional containing the value if the key exists, std::nullopt otherwise.
-  std::optional<ValueType> Get(const KeyType& key) override { return cache_->Get(key); }
+  std::optional<ValueType> Get(const KeyType& key,
+                               std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
+    return cache_->Get(key);
+  }
 
   /// @brief Removes the key-value pair associated with the given key.
   /// @param key The key to remove.
   /// @return true if the key was found and removed, false otherwise.
-  bool Remove(const KeyType& key) override {
+  bool Remove(const KeyType& key, std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
 
     auto it = key_iter_map_.find(key);
