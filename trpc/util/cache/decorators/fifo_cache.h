@@ -43,7 +43,7 @@ namespace trpc::cache {
 /// @tparam KeyEqual  Key equality comparator (default: std::equal_to<KeyType>).
 /// @tparam Mutex     Mutex type for synchronization (default: std::mutex).
 template <typename KeyType, typename ValueType, typename HashFn = std::hash<KeyType>,
-          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::std::timed_mutex>
+          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::timed_mutex>
 class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
  public:
   /// @brief Constructs a FIFO Cache with a wrapped cache instance and a maximum capacity.
@@ -114,7 +114,9 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   bool Put(const KeyType& key, ValueType&& value,
            std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
-
+    if (!mutex_.try_lock_for(timeout)) {
+      return false;
+    }
     if (key_iter_map_.find(key) != key_iter_map_.end()) {
       return cache_->Put(key, std::forward<ValueType>(value));
     }
@@ -148,7 +150,9 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @return true if the key was found and removed, false otherwise.
   bool Remove(const KeyType& key, std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
-
+    if (!mutex_.try_lock_for(timeout)) {
+      return false;
+    }
     auto it = key_iter_map_.find(key);
     if (it == key_iter_map_.end()) {
       return false;
