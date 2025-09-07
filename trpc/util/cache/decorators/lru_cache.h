@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -43,7 +44,7 @@ namespace trpc::cache {
 /// @tparam KeyEqual  Key equality comparator (default: std::equal_to<KeyType>).
 /// @tparam Mutex     Mutex type for synchronization (default: std::mutex).
 template <typename KeyType, typename ValueType, typename HashFn = std::hash<KeyType>,
-          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::mutex>
+          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::timed_mutex>
 class LRUCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
  public:
   /// @brief Constructs a LRU Cache with a wrapped cache instance and a maximum capacity.
@@ -80,7 +81,8 @@ class LRUCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @param key The key to insert or update.
   /// @param value The value to associate with the key.
   /// @return  true if insertion succeeded, false otherwise (e.g., key exists).
-  bool Put(const KeyType& key, const ValueType& value) override {
+  bool Put(const KeyType& key, const ValueType& value,
+           std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
 
     if (auto it = key_iter_map_.find(key); it != key_iter_map_.end()) {
@@ -110,7 +112,8 @@ class LRUCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @param key The key to insert or update.
   /// @param value The value to associate with the key.
   /// @return  true if insertion succeeded, false otherwise (e.g., key exists).
-  bool Put(const KeyType& key, ValueType&& value) override {
+  bool Put(const KeyType& key, ValueType&& value,
+           std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
 
     if (auto it = key_iter_map_.find(key); it != key_iter_map_.end()) {
@@ -155,7 +158,7 @@ class LRUCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @brief Removes the key-value pair associated with the given key.
   /// @param key The key to remove.
   /// @return true if the key was found and removed, false otherwise.
-  bool Remove(const KeyType& key) override {
+  bool Remove(const KeyType& key, std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
 
     auto it = key_iter_map_.find(key);

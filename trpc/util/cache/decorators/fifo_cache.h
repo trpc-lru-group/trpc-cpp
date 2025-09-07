@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -42,7 +43,7 @@ namespace trpc::cache {
 /// @tparam KeyEqual  Key equality comparator (default: std::equal_to<KeyType>).
 /// @tparam Mutex     Mutex type for synchronization (default: std::mutex).
 template <typename KeyType, typename ValueType, typename HashFn = std::hash<KeyType>,
-          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::mutex>
+          typename KeyEqual = std::equal_to<KeyType>, typename Mutex = std::timed_mutex>
 class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
  public:
   /// @brief Constructs a FIFO Cache with a wrapped cache instance and a maximum capacity.
@@ -79,7 +80,11 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @param key The key to insert or update.
   /// @param value The value to associate with the key.
   /// @return  true if insertion succeeded, false otherwise (e.g., key exists).
-  bool Put(const KeyType& key, const ValueType& value) override {
+  bool Put(const KeyType& key, const ValueType& value,
+           std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
+    if (!mutex_.try_lock_for(timeout)) {
+      return false;
+    }
     std::lock_guard<Mutex> lock(mutex_);
 
     if (key_iter_map_.find(key) != key_iter_map_.end()) {
@@ -106,9 +111,12 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @param key The key to insert or update.
   /// @param value The value to associate with the key.
   /// @return  true if insertion succeeded, false otherwise (e.g., key exists).
-  bool Put(const KeyType& key, ValueType&& value) override {
+  bool Put(const KeyType& key, ValueType&& value,
+           std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
-
+    if (!mutex_.try_lock_for(timeout)) {
+      return false;
+    }
     if (key_iter_map_.find(key) != key_iter_map_.end()) {
       return cache_->Put(key, std::forward<ValueType>(value));
     }
@@ -132,14 +140,19 @@ class FIFOCache final : public Cache<KeyType, ValueType, HashFn, KeyEqual> {
   /// @brief Retrieves the value associated with the given key.
   /// @param key The key to look up.
   /// @return An optional containing the value if the key exists, std::nullopt otherwise.
-  std::optional<ValueType> Get(const KeyType& key) override { return cache_->Get(key); }
+  std::optional<ValueType> Get(const KeyType& key,
+                               std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
+    return cache_->Get(key);
+  }
 
   /// @brief Removes the key-value pair associated with the given key.
   /// @param key The key to remove.
   /// @return true if the key was found and removed, false otherwise.
-  bool Remove(const KeyType& key) override {
+  bool Remove(const KeyType& key, std::chrono::milliseconds timeout = std::chrono::milliseconds(100)) override {
     std::lock_guard<Mutex> lock(mutex_);
-
+    if (!mutex_.try_lock_for(timeout)) {
+      return false;
+    }
     auto it = key_iter_map_.find(key);
     if (it == key_iter_map_.end()) {
       return false;
